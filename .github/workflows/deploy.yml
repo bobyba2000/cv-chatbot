@@ -23,7 +23,7 @@ jobs:
 
       - name: Build Web
         # Replace 'your-repo-name' with your actual repository name
-        run: flutter build web --release --base-href "/your-repo-name/"
+        run: flutter build web --release --base-href "/cv-chatbot/"
 
       - name: Deploy to GitHub Pages
         uses: JamesIves/github-pages-deploy-action@v4
