@@ -7,6 +7,10 @@
 
 # The following line activates a set of recommended lints for Flutter apps,
 # packages, and plugins designed to encourage good coding practices.
+analyzer:
+  errors:
+    use_build_context_synchronously: ignore
+    deprecated_member_use: ignore
 include: package:flutter_lints/flutter.yaml
 
 linter:
@@ -23,6 +27,33 @@ linter:
   rules:
     # avoid_print: false  # Uncomment to disable the `avoid_print` rule
     # prefer_single_quotes: true  # Uncomment to enable the `prefer_single_quotes` rule
+    # Best practices
+    always_declare_return_types: true
+    avoid_print: true
+    prefer_const_constructors: true
+    prefer_final_locals: true
+    use_key_in_widget_constructors: true
+
+    # Code style
+    unnecessary_this: true
+    prefer_single_quotes: true
+    sort_constructors_first: true
+    lines_longer_than_80_chars: false
+
+    # Error prevention
+    avoid_returning_null_for_future: true
+    avoid_unnecessary_containers: true
+    avoid_empty_else: true
+
+    # Maintainability
+    constant_identifier_names: false
+    prefer_const_literals_to_create_immutables: true
+    unnecessary_new: true
+
+    # Flutter specific
+    avoid_redundant_argument_values: true
+    sized_box_for_whitespace: true
+    prefer_const_constructors_in_immutables: true
 
 # Additional information about this file can be found at
 # https://dart.dev/guides/language/analysis-options
