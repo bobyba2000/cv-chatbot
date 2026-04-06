@@ -17,6 +17,8 @@ class CvChatbotPage extends StatefulWidget {
 }
 
 class _CvChatbotPageState extends State<CvChatbotPage> {
+  static const int _maxUserMessages = 5;
+
   final ChatbotService _apiService = AppDependencies.injector
       .get<ChatbotService>();
 
@@ -39,6 +41,8 @@ class _CvChatbotPageState extends State<CvChatbotPage> {
   bool _isPromptingJd = false;
   String _inputHint = 'Ask follow-up questions or paste JD with "JD:"';
   final FocusNode _inputFocus = FocusNode();
+  int _sentMessageCount = 0;
+  bool _hasShownChatLimitNotice = false;
 
   @override
   void initState() {
@@ -70,8 +74,72 @@ class _CvChatbotPageState extends State<CvChatbotPage> {
     setState(() {
       _hasCv = false;
       _cvFileName = null;
+      _sentMessageCount = 0;
+      _hasShownChatLimitNotice = false;
     });
     await _uploadCv();
+  }
+
+  bool get _hasReachedMessageLimit => _sentMessageCount >= _maxUserMessages;
+
+  bool _canApplyFix(ChatMessage message) {
+    return message.updatedPdfUrl == null &&
+        message.sessionId != null &&
+        message.cvId != null &&
+        message.highlights.isNotEmpty;
+  }
+
+  int? _latestActionableMessageIndex() {
+    for (int index = _messages.length - 1; index >= 0; index -= 1) {
+      final message = _messages[index];
+      if (message.role != ChatRole.bot) {
+        continue;
+      }
+      if (message.updatedPdfUrl != null || _canApplyFix(message)) {
+        return index;
+      }
+    }
+    return null;
+  }
+
+  int? _latestBotMessageIndex() {
+    for (int index = _messages.length - 1; index >= 0; index -= 1) {
+      if (_messages[index].role == ChatRole.bot) {
+        return index;
+      }
+    }
+    return null;
+  }
+
+  void _appendChatLimitNoticeIfNeeded() {
+    if (!_hasReachedMessageLimit || _hasShownChatLimitNotice) {
+      return;
+    }
+
+    final latestIndex = _latestActionableMessageIndex();
+    final source = latestIndex != null ? _messages[latestIndex] : null;
+
+    _messages.add(
+      ChatMessage(
+        role: ChatRole.bot,
+        text:
+            'You have reached the 5-message limit for this chat. Use the latest CV action below to continue.',
+        sessionId: source?.sessionId,
+        cvId: source?.cvId,
+        highlights: source?.highlights ?? const <CvHighlight>[],
+        updatedPdfUrl: source?.updatedPdfUrl,
+        showApplyFix:
+            source?.showApplyFix ??
+            _canApplyFix(
+              source ?? const ChatMessage(role: ChatRole.bot, text: ''),
+            ),
+        isChatLimitNotice: true,
+      ),
+    );
+
+    _hasShownChatLimitNotice = true;
+    _inputHint =
+        'Message limit reached. Download the latest CV or apply fixes below.';
   }
 
   void _handleTryAnotherJd() {
@@ -326,6 +394,9 @@ class _CvChatbotPageState extends State<CvChatbotPage> {
         _hasCv = true;
         _cvFileName = file.name;
         _sessionId = sessionId.isEmpty ? _sessionId : sessionId;
+        _sentMessageCount = 0;
+        _hasShownChatLimitNotice = false;
+        _inputHint = 'Ask follow-up questions or paste JD with "JD:"';
         _messages.add(
           ChatMessage(
             role: ChatRole.bot,
@@ -358,7 +429,19 @@ class _CvChatbotPageState extends State<CvChatbotPage> {
 
   Future<void> _sendMessage() async {
     final rawText = _inputController.text.trim();
-    if (rawText.isEmpty || _isTyping || _isUploadingCv) {
+    if (rawText.isEmpty ||
+        _isTyping ||
+        _isUploadingCv ||
+        _hasReachedMessageLimit) {
+      if (_hasReachedMessageLimit && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'You have reached the 5-message limit. Use the latest CV action below.',
+            ),
+          ),
+        );
+      }
       return;
     }
 
@@ -374,6 +457,7 @@ class _CvChatbotPageState extends State<CvChatbotPage> {
     _inputController.clear();
     setState(() {
       _messages.add(ChatMessage(role: ChatRole.user, text: rawText));
+      _sentMessageCount += 1;
       _isTyping = true;
     });
     _scrollToBottom();
@@ -445,6 +529,20 @@ class _CvChatbotPageState extends State<CvChatbotPage> {
         if (sessionId.isNotEmpty) {
           _sessionId = sessionId;
         }
+        final latestActionIndex = _latestActionableMessageIndex();
+        final latestActionMessage = latestActionIndex != null
+            ? _messages[latestActionIndex]
+            : null;
+        final showApplyFix = decoded['show_apply_fix'] == true;
+        final inheritedSessionId = latestActionMessage?.sessionId;
+        final inheritedCvId = latestActionMessage?.cvId;
+        final inheritedHighlights =
+            latestActionMessage?.highlights ?? const <CvHighlight>[];
+        final canInheritApplyFix =
+            inheritedSessionId != null &&
+            inheritedCvId != null &&
+            inheritedHighlights.isNotEmpty &&
+            latestActionMessage?.updatedPdfUrl == null;
         _messages.add(
           ChatMessage(
             role: ChatRole.bot,
@@ -453,14 +551,29 @@ class _CvChatbotPageState extends State<CvChatbotPage> {
             score: responseType == 'analysis'
                 ? ((decoded['score'] as num?) ?? 0).round().clamp(0, 100)
                 : null,
+            sessionId: showApplyFix
+                ? (latestActionMessage?.sessionId ??
+                      (sessionId.isEmpty ? null : sessionId))
+                : (canInheritApplyFix ? inheritedSessionId : null),
+            cvId: showApplyFix
+                ? latestActionMessage?.cvId
+                : (canInheritApplyFix ? inheritedCvId : null),
+            highlights: showApplyFix
+                ? (latestActionMessage?.highlights ?? const <CvHighlight>[])
+                : (canInheritApplyFix
+                      ? inheritedHighlights
+                      : const <CvHighlight>[]),
+            showApplyFix: showApplyFix || canInheritApplyFix,
           ),
         );
+        _appendChatLimitNoticeIfNeeded();
       });
     } catch (error) {
       setState(() {
         _messages.add(
           ChatMessage(role: ChatRole.bot, text: 'Network error: $error'),
         );
+        _appendChatLimitNoticeIfNeeded();
       });
     } finally {
       setState(() {
@@ -531,23 +644,27 @@ class _CvChatbotPageState extends State<CvChatbotPage> {
       }
 
       final updatedPdfUrl = (decoded['updated_pdf_url'] ?? '').toString();
+      final previewImageUrl = (decoded['preview_image_url'] ?? '').toString();
 
       setState(() {
         _messages[messageIndex] = _messages[messageIndex].copyWith(
           isApplyingFixes: false,
           updatedPdfUrl: updatedPdfUrl.isEmpty ? null : updatedPdfUrl,
+          imageUrl: previewImageUrl.isEmpty ? null : previewImageUrl,
+          showApplyFix: false,
         );
-        // _messages.add(
-        //   ChatMessage(
-        //     role: ChatRole.bot,
-        //     text:
-        //         '$resultMessage\n\nYour updated CV is ready to download from the analysis card above.',
-        //     imageUrl: previewImageUrl.isEmpty ? null : previewImageUrl,
-        //     score: score,
-        //     lowMatch: lowMatch,
-        //     recommendations: recommendations,
-        //   ),
-        // );
+        if (_hasReachedMessageLimit) {
+          final existingNoticeIndex = _messages.indexWhere(
+            (item) => item.isChatLimitNotice,
+          );
+          if (existingNoticeIndex >= 0) {
+            _messages[existingNoticeIndex] = _messages[existingNoticeIndex]
+                .copyWith(
+                  updatedPdfUrl: updatedPdfUrl.isEmpty ? null : updatedPdfUrl,
+                  showApplyFix: false,
+                );
+          }
+        }
       });
     } catch (error) {
       setState(() {
@@ -599,6 +716,10 @@ class _CvChatbotPageState extends State<CvChatbotPage> {
                         return ChatMessageBubble(
                           message: _messages[index],
                           index: index,
+                          showApplyFixAction: _latestBotMessageIndex() == index,
+                          showDownloadAction:
+                              _latestBotMessageIndex() == index &&
+                              _messages[index].updatedPdfUrl != null,
                           onTryAnotherCv: _handleTryAnotherCv,
                           onTryAnotherJd: _handleTryAnotherJd,
                           onApplyAiFixes: _applyAiFixes,
@@ -617,6 +738,7 @@ class _CvChatbotPageState extends State<CvChatbotPage> {
                     hasCv: _hasCv,
                     isTyping: _isTyping,
                     isUploadingCv: _isUploadingCv,
+                    isMessageLimitReached: _hasReachedMessageLimit,
                     inputController: _inputController,
                     inputFocus: _inputFocus,
                     inputHint: _inputHint,

@@ -69,6 +69,8 @@ class ChatMessage {
     this.cvId,
     this.isApplyingFixes = false,
     this.updatedPdfUrl,
+    this.showApplyFix = false,
+    this.isChatLimitNotice = false,
   });
   static const Object _unset = Object();
 
@@ -85,6 +87,8 @@ class ChatMessage {
   final String? cvId;
   final bool isApplyingFixes;
   final String? updatedPdfUrl;
+  final bool showApplyFix;
+  final bool isChatLimitNotice;
 
   ChatMessage copyWith({
     ChatRole? role,
@@ -100,6 +104,8 @@ class ChatMessage {
     Object? cvId = _unset,
     bool? isApplyingFixes,
     Object? updatedPdfUrl = _unset,
+    bool? showApplyFix,
+    bool? isChatLimitNotice,
   }) {
     return ChatMessage(
       role: role ?? this.role,
@@ -121,6 +127,8 @@ class ChatMessage {
       updatedPdfUrl: identical(updatedPdfUrl, _unset)
           ? this.updatedPdfUrl
           : updatedPdfUrl as String?,
+      showApplyFix: showApplyFix ?? this.showApplyFix,
+      isChatLimitNotice: isChatLimitNotice ?? this.isChatLimitNotice,
     );
   }
 }

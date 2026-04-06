@@ -7,6 +7,8 @@ class ChatMessageBubble extends StatelessWidget {
     super.key,
     required this.message,
     required this.index,
+    required this.showApplyFixAction,
+    required this.showDownloadAction,
     required this.onTryAnotherCv,
     required this.onTryAnotherJd,
     required this.onApplyAiFixes,
@@ -16,6 +18,8 @@ class ChatMessageBubble extends StatelessWidget {
   });
   final ChatMessage message;
   final int index;
+  final bool showApplyFixAction;
+  final bool showDownloadAction;
   final VoidCallback onTryAnotherCv;
   final VoidCallback onTryAnotherJd;
   final void Function(int messageIndex) onApplyAiFixes;
@@ -201,6 +205,7 @@ class ChatMessageBubble extends StatelessWidget {
                 ),
               ],
               if (!isUser &&
+                  showApplyFixAction &&
                   message.updatedPdfUrl == null &&
                   message.sessionId != null &&
                   message.cvId != null &&
@@ -225,6 +230,7 @@ class ChatMessageBubble extends StatelessWidget {
                 ),
               ],
               if (!isUser &&
+                  showDownloadAction &&
                   message.updatedPdfUrl != null &&
                   !message.lowMatch) ...[
                 const SizedBox(height: 12),

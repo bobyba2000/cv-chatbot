@@ -6,6 +6,7 @@ class ChatbotInputBar extends StatelessWidget {
     required this.hasCv,
     required this.isTyping,
     required this.isUploadingCv,
+    required this.isMessageLimitReached,
     required this.inputController,
     required this.inputFocus,
     required this.inputHint,
@@ -15,6 +16,7 @@ class ChatbotInputBar extends StatelessWidget {
   final bool hasCv;
   final bool isTyping;
   final bool isUploadingCv;
+  final bool isMessageLimitReached;
   final TextEditingController inputController;
   final FocusNode inputFocus;
   final String inputHint;
@@ -39,6 +41,7 @@ class ChatbotInputBar extends StatelessWidget {
           Expanded(
             child: TextField(
               controller: inputController,
+              enabled: !isMessageLimitReached,
               minLines: 1,
               maxLines: 5,
               textInputAction: TextInputAction.newline,
@@ -48,7 +51,9 @@ class ChatbotInputBar extends StatelessWidget {
           ),
           const SizedBox(width: 8),
           IconButton(
-            onPressed: (isTyping || isUploadingCv) ? null : onSendMessage,
+            onPressed: (isTyping || isUploadingCv || isMessageLimitReached)
+                ? null
+                : onSendMessage,
             icon: const Icon(Icons.send),
             tooltip: 'Send',
           ),
