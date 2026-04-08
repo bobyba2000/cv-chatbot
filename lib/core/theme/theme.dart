@@ -17,6 +17,17 @@ class AppTheme {
             surface: Colors.white,
             onSurface: Colors.black,
           ),
+      dialogTheme: DialogThemeData(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        titleTextStyle: appTextTheme.headlineSmall?.copyWith(
+          fontWeight: FontWeight.bold,
+          color: Colors.black87,
+        ),
+        contentTextStyle: appTextTheme.bodyMedium?.copyWith(
+          color: Colors.black87,
+        ),
+      ),
       scaffoldBackgroundColor: Colors.white,
       appBarTheme: const AppBarTheme(
         backgroundColor: Colors.black,

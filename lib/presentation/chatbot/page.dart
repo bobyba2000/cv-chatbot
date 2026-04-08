@@ -2,6 +2,7 @@ import 'package:chatbot_cv/core/dependencies/app.dart';
 import 'package:chatbot_cv/models/chat/model.dart';
 import 'package:chatbot_cv/presentation/chatbot/widgets/chat_message_bubble.dart';
 import 'package:chatbot_cv/presentation/chatbot/widgets/chatbot_input_bar.dart';
+import 'package:chatbot_cv/presentation/chatbot/widgets/jd_detail_dialog.dart';
 import 'package:chatbot_cv/presentation/chatbot/widgets/chatbot_top_panel.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -290,22 +291,10 @@ class _CvChatbotPageState extends State<CvChatbotPage> {
     await showDialog<void>(
       context: context,
       builder: (context) {
-        return AlertDialog(
-          title: Text(
-            _extractTitle(jd).isEmpty ? 'JD Detail' : _extractTitle(jd),
-          ),
-          content: SizedBox(
-            width: 560,
-            child: SingleChildScrollView(
-              child: SelectableText(_formatJdText(jd)),
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Close'),
-            ),
-          ],
+        return JdDetailDialog(
+          jd: jd,
+          fallbackTitle: _extractTitle(jd),
+          fallbackText: _formatJdText(jd),
         );
       },
     );
