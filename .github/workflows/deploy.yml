@@ -21,6 +21,12 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
+      - name: Run generate image assets
+        run: flutter pub run build_runner build --delete-conflicting-outputs
+      
+      - name: Run Generate Localizations
+        run: dart run intl_utils:generate
+
       - name: Build Web
         # Replace 'your-repo-name' with your actual repository name
         run: flutter build web --release --base-href "/cv-chatbot/"
