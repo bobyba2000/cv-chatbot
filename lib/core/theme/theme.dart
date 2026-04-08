@@ -1,13 +1,17 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 class AppTheme {
   static ThemeData get lightTheme {
+    final baseTheme = ThemeData.light(useMaterial3: true);
+    final appTextTheme = GoogleFonts.robotoTextTheme(baseTheme.textTheme);
+
     return ThemeData(
       useMaterial3: true,
-      colorScheme:
-          ColorScheme.fromSeed(
-            seedColor: const Color(0xFFB00020),
-          ).copyWith(
+      textTheme: appTextTheme,
+      primaryTextTheme: appTextTheme,
+      colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFFB00020))
+          .copyWith(
             primary: const Color(0xFFB00020),
             onPrimary: Colors.white,
             surface: Colors.white,

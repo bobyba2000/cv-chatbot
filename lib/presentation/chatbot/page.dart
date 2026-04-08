@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../services/chatbot.dart';
+import '../../services/jd.dart';
 
 class CvChatbotPage extends StatefulWidget {
   const CvChatbotPage({super.key});
@@ -21,6 +22,7 @@ class _CvChatbotPageState extends State<CvChatbotPage> {
 
   final ChatbotService _apiService = AppDependencies.injector
       .get<ChatbotService>();
+  final JdService _jdService = AppDependencies.injector.get<JdService>();
 
   final TextEditingController _inputController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
@@ -37,6 +39,10 @@ class _CvChatbotPageState extends State<CvChatbotPage> {
   bool _hasCv = false;
   String? _cvFileName;
   String? _jobDescription;
+  String? _selectedJdId;
+  String _jdSearchQuery = '';
+  bool _isLoadingJds = false;
+  List<Map<String, dynamic>> _jdLibrary = const [];
   String? _sessionId;
   bool _isPromptingJd = false;
   String _inputHint = 'Ask follow-up questions or paste JD with "JD:"';
@@ -47,9 +53,7 @@ class _CvChatbotPageState extends State<CvChatbotPage> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _promptForJobDescription();
-    });
+    _loadJdLibrary();
   }
 
   @override
@@ -145,10 +149,166 @@ class _CvChatbotPageState extends State<CvChatbotPage> {
   void _handleTryAnotherJd() {
     setState(() {
       _jobDescription = null;
+      _selectedJdId = null;
       _inputHint = 'Paste another Job Description...';
       _inputController.clear();
     });
     _inputFocus.requestFocus();
+  }
+
+  String _extractTitle(Map<String, dynamic> jd) {
+    return (jd['position'] ?? '').toString().trim();
+  }
+
+  List<Map<String, dynamic>> get _orderedJds {
+    final items = List<Map<String, dynamic>>.from(_jdLibrary);
+    items.sort((a, b) {
+      final aId = (a['id'] ?? '').toString();
+      final bId = (b['id'] ?? '').toString();
+      if (_selectedJdId != null && aId == _selectedJdId) {
+        return -1;
+      }
+      if (_selectedJdId != null && bId == _selectedJdId) {
+        return 1;
+      }
+      return _extractTitle(a).compareTo(_extractTitle(b));
+    });
+    return items;
+  }
+
+  List<Map<String, dynamic>> get _visibleJds {
+    final query = _jdSearchQuery.trim().toLowerCase();
+    if (query.isEmpty) {
+      return _orderedJds;
+    }
+    return _orderedJds.where((jd) {
+      final title = _extractTitle(jd).toLowerCase();
+      final rawDesc = jd['job_description'];
+      final description = rawDesc is List
+          ? rawDesc.map((item) => item.toString()).join(' ').toLowerCase()
+          : rawDesc.toString().toLowerCase();
+      return title.contains(query) || description.contains(query);
+    }).toList();
+  }
+
+  String _formatJdText(Map<String, dynamic> jd) {
+    final position = _extractTitle(jd);
+    final descriptions = (jd['job_description'] is List)
+        ? (jd['job_description'] as List)
+              .map((item) => item.toString().trim())
+              .where((item) => item.isNotEmpty)
+              .toList()
+        : <String>[];
+    final education = (jd['education'] is List)
+        ? (jd['education'] as List)
+              .map((item) => item.toString().trim())
+              .where((item) => item.isNotEmpty)
+              .toList()
+        : <String>[];
+    final skill = jd['skill'] is Map<String, dynamic>
+        ? jd['skill'] as Map<String, dynamic>
+        : <String, dynamic>{};
+
+    String formatSkillList(String key) {
+      final value = skill[key];
+      if (value is! List) {
+        return '';
+      }
+      final items = value
+          .map((item) => item.toString().trim())
+          .where((item) => item.isNotEmpty)
+          .toList();
+      if (items.isEmpty) {
+        return '';
+      }
+      return '- $key: ${items.join(', ')}';
+    }
+
+    final skillLines = [
+      formatSkillList('professional'),
+      formatSkillList('technical'),
+      formatSkillList('technology'),
+    ].where((line) => line.isNotEmpty).toList();
+
+    final buffer = StringBuffer();
+    if (position.isNotEmpty) {
+      buffer.writeln('Position: $position');
+    }
+    if (descriptions.isNotEmpty) {
+      buffer.writeln('\nJob Description:');
+      for (final line in descriptions) {
+        buffer.writeln('- $line');
+      }
+    }
+    if (skillLines.isNotEmpty) {
+      buffer.writeln('\nSkill:');
+      for (final line in skillLines) {
+        buffer.writeln(line);
+      }
+    }
+    if (education.isNotEmpty) {
+      buffer.writeln('\nEducation:');
+      for (final line in education) {
+        buffer.writeln('- $line');
+      }
+    }
+    return buffer.toString().trim();
+  }
+
+  Future<void> _loadJdLibrary() async {
+    setState(() {
+      _isLoadingJds = true;
+    });
+
+    final response = await _jdService.getJds();
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _isLoadingJds = false;
+      if (response.isSuccessful) {
+        _jdLibrary = response.data ?? const [];
+      }
+    });
+  }
+
+  void _selectJd(Map<String, dynamic> jd) {
+    final id = (jd['id'] ?? '').toString();
+    if (id.isEmpty) {
+      return;
+    }
+
+    setState(() {
+      _selectedJdId = id;
+      _jobDescription = _formatJdText(jd);
+      _inputHint = 'Ask follow-up questions or paste JD with "JD:"';
+    });
+  }
+
+  Future<void> _showJdDetail(Map<String, dynamic> jd) async {
+    await showDialog<void>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: Text(
+            _extractTitle(jd).isEmpty ? 'JD Detail' : _extractTitle(jd),
+          ),
+          content: SizedBox(
+            width: 560,
+            child: SingleChildScrollView(
+              child: SelectableText(_formatJdText(jd)),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Close'),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   List<String> _resolveRecommendations(Object? raw, bool lowMatch) {
@@ -221,6 +381,7 @@ class _CvChatbotPageState extends State<CvChatbotPage> {
                 }
                 setState(() {
                   _jobDescription = text;
+                  _selectedJdId = null;
                   _inputHint = 'Ask follow-up questions or paste JD with "JD:"';
                 });
                 Navigator.of(context).pop();
@@ -692,44 +853,64 @@ class _CvChatbotPageState extends State<CvChatbotPage> {
               constraints: const BoxConstraints(maxWidth: 980),
               child: Column(
                 children: [
-                  ChatbotTopPanel(
-                    cvFileName: _cvFileName,
-                    hasCv: _hasCv,
-                    hasJobDescription: _jobDescription != null,
-                    onRemoveJd: () {
-                      setState(() {
-                        _jobDescription = null;
-                      });
-                    },
-                    onUploadCv: _hasCv ? _handleTryAnotherCv : _uploadCv,
-                    onUseAnotherJd: _handleTryAnotherJd,
-                  ),
                   Expanded(
-                    child: ListView.builder(
-                      controller: _scrollController,
-                      padding: const EdgeInsets.all(12),
-                      itemCount: _messages.length + (_isTyping ? 1 : 0),
-                      itemBuilder: (context, index) {
-                        if (_isTyping && index == _messages.length) {
-                          return const ChatTypingIndicator();
-                        }
-                        return ChatMessageBubble(
-                          message: _messages[index],
-                          index: index,
-                          showApplyFixAction: _latestBotMessageIndex() == index,
-                          showDownloadAction:
-                              _latestBotMessageIndex() == index &&
-                              _messages[index].updatedPdfUrl != null,
-                          onTryAnotherCv: _handleTryAnotherCv,
-                          onTryAnotherJd: _handleTryAnotherJd,
-                          onApplyAiFixes: _applyAiFixes,
-                          onOpenImageViewer: _openImageViewer,
-                          onOpenExternalUrl: _openExternalUrl,
-                          onSuggestionTap: (suggestion) {
-                            _inputController.text = suggestion;
-                          },
-                        );
-                      },
+                    child: SingleChildScrollView(
+                      child: Column(
+                        children: [
+                          ChatbotTopPanel(
+                            cvFileName: _cvFileName,
+                            hasCv: _hasCv,
+                            isLoadingJds: _isLoadingJds,
+                            jdItems: _visibleJds,
+                            selectedJdId: _selectedJdId,
+                            onRemoveJd: () {
+                              setState(() {
+                                _jobDescription = null;
+                                _selectedJdId = null;
+                              });
+                            },
+                            onUploadCv: _hasCv
+                                ? _handleTryAnotherCv
+                                : _uploadCv,
+                            onSearchChanged: (value) {
+                              setState(() {
+                                _jdSearchQuery = value;
+                              });
+                            },
+                            onSelectJd: _selectJd,
+                            onViewJdDetail: _showJdDetail,
+                            onEnterJdManually: _promptForJobDescription,
+                          ),
+                          ListView.builder(
+                            controller: _scrollController,
+                            shrinkWrap: true,
+                            padding: const EdgeInsets.all(12),
+                            itemCount: _messages.length + (_isTyping ? 1 : 0),
+                            itemBuilder: (context, index) {
+                              if (_isTyping && index == _messages.length) {
+                                return const ChatTypingIndicator();
+                              }
+                              return ChatMessageBubble(
+                                message: _messages[index],
+                                index: index,
+                                showApplyFixAction:
+                                    _latestBotMessageIndex() == index,
+                                showDownloadAction:
+                                    _latestBotMessageIndex() == index &&
+                                    _messages[index].updatedPdfUrl != null,
+                                onTryAnotherCv: _handleTryAnotherCv,
+                                onTryAnotherJd: _handleTryAnotherJd,
+                                onApplyAiFixes: _applyAiFixes,
+                                onOpenImageViewer: _openImageViewer,
+                                onOpenExternalUrl: _openExternalUrl,
+                                onSuggestionTap: (suggestion) {
+                                  _inputController.text = suggestion;
+                                },
+                              );
+                            },
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                   if (_isUploadingCv)
