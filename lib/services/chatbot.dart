@@ -46,6 +46,7 @@ class ChatbotService extends BaseService {
     required String sessionId,
     required String cvId,
     required List<CvHighlight> highlights,
+    List<Map<String, String>> history = const <Map<String, String>>[],
   }) {
     return rest.sendRawRequest(
       Method.post,
@@ -54,6 +55,7 @@ class ChatbotService extends BaseService {
         'sessionId': sessionId,
         'cvId': cvId,
         'highlights': highlights.map((item) => item.toJson()).toList(),
+        'history': history,
       },
     );
   }

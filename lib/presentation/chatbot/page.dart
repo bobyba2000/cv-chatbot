@@ -27,6 +27,7 @@ class _CvChatbotPageState extends State<CvChatbotPage> {
 
   final TextEditingController _inputController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
+  final ScrollController _pageScrollController = ScrollController();
   final List<ChatMessage> _messages = [
     const ChatMessage(
       role: ChatRole.bot,
@@ -46,6 +47,7 @@ class _CvChatbotPageState extends State<CvChatbotPage> {
   List<Map<String, dynamic>> _jdLibrary = const [];
   String? _sessionId;
   bool _isPromptingJd = false;
+  bool _highlightJdPanel = false;
   String _inputHint = 'Ask follow-up questions or paste JD with "JD:"';
   final FocusNode _inputFocus = FocusNode();
   int _sentMessageCount = 0;
@@ -62,6 +64,7 @@ class _CvChatbotPageState extends State<CvChatbotPage> {
     _inputController.dispose();
     _inputFocus.dispose();
     _scrollController.dispose();
+    _pageScrollController.dispose();
     super.dispose();
   }
 
@@ -107,13 +110,54 @@ class _CvChatbotPageState extends State<CvChatbotPage> {
     return null;
   }
 
-  int? _latestBotMessageIndex() {
-    for (int index = _messages.length - 1; index >= 0; index -= 1) {
-      if (_messages[index].role == ChatRole.bot) {
+  int? _latestApplicableFixSourceIndex(int upToIndex) {
+    if (_messages.isEmpty) {
+      return null;
+    }
+
+    final safeEndIndex = upToIndex.clamp(0, _messages.length - 1);
+    for (int index = safeEndIndex; index >= 0; index -= 1) {
+      final message = _messages[index];
+      if (message.role != ChatRole.bot) {
+        continue;
+      }
+      if (_canApplyFix(message)) {
         return index;
       }
     }
     return null;
+  }
+
+  bool _shouldShowApplyFixAction(int messageIndex) {
+    if (messageIndex <= 0 || messageIndex >= _messages.length) {
+      return false;
+    }
+    final message = _messages[messageIndex];
+    if (message.role != ChatRole.bot || message.updatedPdfUrl != null) {
+      return false;
+    }
+    return _latestApplicableFixSourceIndex(messageIndex) != null;
+  }
+
+  List<Map<String, String>> _buildHistoryUntilMessage(int messageIndex) {
+    if (_messages.isEmpty) {
+      return const <Map<String, String>>[];
+    }
+
+    final safeEndIndex = messageIndex.clamp(0, _messages.length - 1);
+    final history = <Map<String, String>>[];
+    for (int index = 0; index <= safeEndIndex; index += 1) {
+      final message = _messages[index];
+      final content = message.text.trim();
+      if (content.isEmpty) {
+        continue;
+      }
+      history.add({
+        'role': message.role == ChatRole.user ? 'user' : 'assistant',
+        'content': content,
+      });
+    }
+    return history;
   }
 
   void _appendChatLimitNoticeIfNeeded() {
@@ -147,14 +191,32 @@ class _CvChatbotPageState extends State<CvChatbotPage> {
         'Message limit reached. Download the latest CV or apply fixes below.';
   }
 
-  void _handleTryAnotherJd() {
+  Future<void> _handleTryAnotherJd() async {
     setState(() {
       _jobDescription = null;
       _selectedJdId = null;
+      _jdSearchQuery = '';
       _inputHint = 'Paste another Job Description...';
       _inputController.clear();
+      _highlightJdPanel = true;
     });
-    _inputFocus.requestFocus();
+
+    if (_pageScrollController.hasClients) {
+      await _pageScrollController.animateTo(
+        0,
+        duration: const Duration(milliseconds: 420),
+        curve: Curves.easeOutCubic,
+      );
+    }
+
+    Future.delayed(const Duration(seconds: 2), () {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _highlightJdPanel = false;
+      });
+    });
   }
 
   String _extractTitle(Map<String, dynamic> jd) {
@@ -357,6 +419,12 @@ class _CvChatbotPageState extends State<CvChatbotPage> {
             ),
           ),
           actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+              child: const Text('Close'),
+            ),
             TextButton(
               onPressed: () {
                 final text = controller.text.trim();
@@ -738,25 +806,34 @@ class _CvChatbotPageState extends State<CvChatbotPage> {
       return;
     }
 
-    final message = _messages[messageIndex];
-    if (message.isApplyingFixes ||
-        message.updatedPdfUrl != null ||
-        message.sessionId == null ||
-        message.cvId == null ||
-        message.highlights.isEmpty) {
+    final tappedMessage = _messages[messageIndex];
+    if (tappedMessage.isApplyingFixes || tappedMessage.updatedPdfUrl != null) {
+      return;
+    }
+
+    final sourceIndex = _latestApplicableFixSourceIndex(messageIndex);
+    if (sourceIndex == null) {
+      return;
+    }
+
+    final sourceMessage = _messages[sourceIndex];
+    if (sourceMessage.sessionId == null ||
+        sourceMessage.cvId == null ||
+        sourceMessage.highlights.isEmpty) {
       return;
     }
 
     setState(() {
-      _messages[messageIndex] = message.copyWith(isApplyingFixes: true);
+      _messages[messageIndex] = tappedMessage.copyWith(isApplyingFixes: true);
     });
     _scrollToBottom();
 
     try {
       final response = await _apiService.applyFixes(
-        sessionId: message.sessionId!,
-        cvId: message.cvId!,
-        highlights: message.highlights,
+        sessionId: sourceMessage.sessionId!,
+        cvId: sourceMessage.cvId!,
+        highlights: sourceMessage.highlights,
+        history: _buildHistoryUntilMessage(messageIndex),
       );
 
       if (!response.isSuccessful) {
@@ -844,11 +921,13 @@ class _CvChatbotPageState extends State<CvChatbotPage> {
                 children: [
                   Expanded(
                     child: SingleChildScrollView(
+                      controller: _pageScrollController,
                       child: Column(
                         children: [
                           ChatbotTopPanel(
                             cvFileName: _cvFileName,
                             hasCv: _hasCv,
+                            highlightJdSection: _highlightJdPanel,
                             isLoadingJds: _isLoadingJds,
                             jdItems: _visibleJds,
                             selectedJdId: _selectedJdId,
@@ -882,10 +961,10 @@ class _CvChatbotPageState extends State<CvChatbotPage> {
                               return ChatMessageBubble(
                                 message: _messages[index],
                                 index: index,
-                                showApplyFixAction:
-                                    _latestBotMessageIndex() == index,
+                                showApplyFixAction: _shouldShowApplyFixAction(
+                                  index,
+                                ),
                                 showDownloadAction:
-                                    _latestBotMessageIndex() == index &&
                                     _messages[index].updatedPdfUrl != null,
                                 onTryAnotherCv: _handleTryAnotherCv,
                                 onTryAnotherJd: _handleTryAnotherJd,

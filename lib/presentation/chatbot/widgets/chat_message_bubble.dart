@@ -206,10 +206,7 @@ class ChatMessageBubble extends StatelessWidget {
               ],
               if (!isUser &&
                   showApplyFixAction &&
-                  message.updatedPdfUrl == null &&
-                  message.sessionId != null &&
-                  message.cvId != null &&
-                  message.highlights.isNotEmpty) ...[
+                  message.updatedPdfUrl == null) ...[
                 const SizedBox(height: 12),
                 ElevatedButton.icon(
                   onPressed: message.isApplyingFixes
