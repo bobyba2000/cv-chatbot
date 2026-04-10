@@ -51,6 +51,37 @@ class ChatMessageBubble extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              if (message.selectedJdName != null &&
+                  message.selectedJdName!.trim().isNotEmpty) ...[
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: isUser
+                        ? Colors.white.withValues(alpha: 0.16)
+                        : const Color(0xFFE8F0FE),
+                    borderRadius: BorderRadius.circular(999),
+                    border: Border.all(
+                      color: isUser
+                          ? Colors.white.withValues(alpha: 0.35)
+                          : const Color(0xFFBCD3FF),
+                    ),
+                  ),
+                  child: Text(
+                    message.selectedJdName!,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: isUser ? Colors.white : const Color(0xFF0B57D0),
+                      fontWeight: FontWeight.w600,
+                      fontSize: 12,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+              ],
               if (isUser)
                 Text(message.text, style: TextStyle(color: textColor))
               else

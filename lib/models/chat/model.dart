@@ -58,6 +58,7 @@ class ChatMessage {
   const ChatMessage({
     required this.role,
     required this.text,
+    this.selectedJdName,
     this.suggestions = const [],
     this.score,
     this.imageUrl,
@@ -76,6 +77,7 @@ class ChatMessage {
 
   final ChatRole role;
   final String text;
+  final String? selectedJdName;
   final List<String> suggestions;
   final int? score;
   final String? imageUrl;
@@ -93,6 +95,7 @@ class ChatMessage {
   ChatMessage copyWith({
     ChatRole? role,
     String? text,
+    Object? selectedJdName = _unset,
     List<String>? suggestions,
     Object? score = _unset,
     Object? imageUrl = _unset,
@@ -110,6 +113,9 @@ class ChatMessage {
     return ChatMessage(
       role: role ?? this.role,
       text: text ?? this.text,
+      selectedJdName: identical(selectedJdName, _unset)
+          ? this.selectedJdName
+          : selectedJdName as String?,
       suggestions: suggestions ?? this.suggestions,
       score: identical(score, _unset) ? this.score : score as int?,
       imageUrl: identical(imageUrl, _unset)

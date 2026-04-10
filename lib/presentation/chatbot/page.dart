@@ -341,12 +341,21 @@ class _CvChatbotPageState extends State<CvChatbotPage> {
     if (id.isEmpty) {
       return;
     }
+    final jdName = _extractTitle(jd);
 
     setState(() {
       _selectedJdId = id;
       _jobDescription = _formatJdText(jd);
       _inputHint = 'Ask follow-up questions or paste JD with "JD:"';
+      _messages.add(
+        ChatMessage(
+          role: ChatRole.bot,
+          text: 'Job description selected.',
+          selectedJdName: jdName.isEmpty ? 'Untitled position' : jdName,
+        ),
+      );
     });
+    _scrollToBottom();
   }
 
   Future<void> _showJdDetail(Map<String, dynamic> jd) async {
